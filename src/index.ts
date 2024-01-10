@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import * as CANNON from "cannon-es";
-import * as threeToCannon from "three-to-cannon"
+import {threeToCannon, ShapeType, ShapeResult } from "three-to-cannon"
 
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
@@ -22,12 +22,15 @@ camera.position.z = 10;
 let eggWhite: THREE.Group<THREE.Object3DEventMap>, eggBlack: THREE.Group<THREE.Object3DEventMap>;
 const loader = new GLTFLoader();
 
+let eggShape: ShapeResult<CANNON.Shape> | null;
+let whiteEggBody: CANNON.Body;
 // egg-white.glb 로드
 loader.load(
   "egg-white.glb",
   function (gltf) {
     eggWhite = gltf.scene;
     scene.add(eggWhite);
+
     startAnimation();
   },
   undefined,
@@ -52,9 +55,31 @@ loader.load(
 );
 
 function startAnimation() {
-  if (eggWhite && eggBlack) {
-    animate();
-  }
+  if (!eggWhite || !eggBlack) return;
+
+  eggShape = threeToCannon(eggWhite);
+  whiteEggBody = new CANNON.Body({
+    mass: 1,
+    shape: eggShape!.shape,
+  });
+  whiteEggBody.position.set(0, 10, 0);
+  world.addBody(whiteEggBody);
+
+  const groundBody = new CANNON.Body({
+    type: CANNON.Body.STATIC,
+    shape: new CANNON.Box(new CANNON.Vec3(10, 5, 10)),
+  });
+  // groundBody.quaternion.setFromEuler(-Math.PI / 2, 0, 0);
+  world.addBody(groundBody);
+  const groundGeometry = new THREE.PlaneGeometry(10, 10);
+  const groundMaterial = new THREE.MeshBasicMaterial({ color: 0xaa00aa, side: THREE.DoubleSide });
+  const groundMesh = new THREE.Mesh(groundGeometry, groundMaterial);
+  scene.add(groundMesh);
+
+  groundMesh.position.set(groundBody.position.x, groundBody.position.y, groundBody.position.z);
+  groundMesh.quaternion.set(groundBody.quaternion.x, groundBody.quaternion.y, groundBody.quaternion.z, groundBody.quaternion.w);
+
+  animate();
 }
 
 const world = new CANNON.World({
@@ -66,13 +91,7 @@ let lastCallTime: number;
 function animate() {
   requestAnimationFrame(animate);
 
-  eggWhite.rotation.x += 0.01;
-  eggWhite.rotation.z += 0.01;
-  eggWhite.rotation.y += 0.01;
-
-  eggBlack.rotation.x += 0.01;
-  eggBlack.rotation.z += 0.01;
-  eggBlack.rotation.y += 0.01;
+  eggWhite.position.set(whiteEggBody.position.x, whiteEggBody.position.y, whiteEggBody.position.z);
 
   const time = performance.now() / 1000; // seconds
   if (!lastCallTime) {

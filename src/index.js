@@ -1,93 +1,81 @@
 import * as THREE from "three";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import * as CANNON from "cannon-es";
-// const scene = new THREE.Scene();
-// const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-// scene.background = new THREE.Color(0xaaaaaa); // 배경색 설정
-// const renderer = new THREE.WebGLRenderer();
-// renderer.setSize(window.innerWidth, window.innerHeight);
-// document.body.appendChild(renderer.domElement);
-// // const ambientLight = new THREE.AmbientLight(0xffffff, 4);
-// // scene.add(ambientLight);
-// const directionalLight = new THREE.DirectionalLight(0xffffff, 5); // 색상과 밝기 설정
-// directionalLight.position.set(0, 0, 10); // 빛의 방향 설정
-// scene.add(directionalLight);
-// camera.position.z = 10;
-// let eggWhite: THREE.Group<THREE.Object3DEventMap>, eggBlack: THREE.Group<THREE.Object3DEventMap>;
-// const loader = new GLTFLoader();
-// // egg-white.glb 로드
-// loader.load(
-//   "egg-white.glb",
-//   function (gltf) {
-//     eggWhite = gltf.scene;
-//     scene.add(eggWhite);
-//     startAnimation();
-//   },
-//   undefined,
-//   function (error) {
-//     console.error(error);
-//   }
-// );
-// // egg-black.glb 로드
-// loader.load(
-//   "egg-black.glb",
-//   function (gltf) {
-//     eggBlack = gltf.scene;
-//     eggBlack.position.y = 3;
-//     scene.add(eggBlack);
-//     startAnimation();
-//   },
-//   undefined,
-//   function (error) {
-//     console.error(error);
-//   }
-// );
-// function startAnimation() {
-//   if (eggWhite && eggBlack) {
-//     animate();
-//   }
-// }
-// const world = new CANNON.World({
-//   gravity: new CANNON.Vec3(0, -9.8, 0), // m/s²
-// });
-// function animate() {
-//   requestAnimationFrame(animate);
-//   eggWhite.rotation.x += 0.01;
-//   eggWhite.rotation.z += 0.01;
-//   eggWhite.rotation.y += 0.01;
-//   eggBlack.rotation.x += 0.01;
-//   eggBlack.rotation.z += 0.01;
-//   eggBlack.rotation.y += 0.01;
-//   renderer.render(scene, camera);
-// }
-// Cannon.js 월드 생성
-var world = new CANNON.World();
-// world.gravity.set(0, -9.8, 0); // 중력 설정
-// Three.js 씬 생성
+import { threeToCannon } from "three-to-cannon";
 var scene = new THREE.Scene();
 var camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+scene.background = new THREE.Color(0xaaaaaa); // 배경색 설정
 var renderer = new THREE.WebGLRenderer();
 renderer.setSize(window.innerWidth, window.innerHeight);
 document.body.appendChild(renderer.domElement);
-// Cannon.js 월드에 바디 추가 (예: 럭비 공 모양)
-var rugbyBallShape = new CANNON.Cylinder(1, 1, 2, 16);
-var rugbyBallBody = new CANNON.Body({ mass: 1, shape: rugbyBallShape });
-world.addBody(rugbyBallBody);
-// Three.js에서 럭비 공 렌더링
-var rugbyBallGeometry = new THREE.CylinderGeometry(1, 1, 2, 16);
-var rugbyBallMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
-var rugbyBallMesh = new THREE.Mesh(rugbyBallGeometry, rugbyBallMaterial);
-scene.add(rugbyBallMesh);
+// const ambientLight = new THREE.AmbientLight(0xffffff, 4);
+// scene.add(ambientLight);
+var directionalLight = new THREE.DirectionalLight(0xffffff, 5); // 색상과 밝기 설정
+directionalLight.position.set(0, 0, 10); // 빛의 방향 설정
+scene.add(directionalLight);
 camera.position.z = 10;
-// 렌더링 루프 설정
+var eggWhite, eggBlack;
+var loader = new GLTFLoader();
+var eggShape;
+var whiteEggBody;
+// egg-white.glb 로드
+loader.load("egg-white.glb", function (gltf) {
+    eggWhite = gltf.scene;
+    scene.add(eggWhite);
+    startAnimation();
+}, undefined, function (error) {
+    console.error(error);
+});
+// egg-black.glb 로드
+loader.load("egg-black.glb", function (gltf) {
+    eggBlack = gltf.scene;
+    eggBlack.position.y = 3;
+    scene.add(eggBlack);
+    startAnimation();
+}, undefined, function (error) {
+    console.error(error);
+});
+function startAnimation() {
+    if (!eggWhite || !eggBlack)
+        return;
+    eggShape = threeToCannon(eggWhite);
+    whiteEggBody = new CANNON.Body({
+        mass: 1,
+        shape: eggShape.shape,
+    });
+    whiteEggBody.position.set(0, 10, 0);
+    world.addBody(whiteEggBody);
+    var groundBody = new CANNON.Body({
+        type: CANNON.Body.STATIC,
+        shape: new CANNON.Box(new CANNON.Vec3(10, 5, 10)),
+    });
+    // groundBody.quaternion.setFromEuler(-Math.PI / 2, 0, 0);
+    world.addBody(groundBody);
+    var groundGeometry = new THREE.PlaneGeometry(10, 10);
+    var groundMaterial = new THREE.MeshBasicMaterial({ color: 0xaa00aa, side: THREE.DoubleSide });
+    var groundMesh = new THREE.Mesh(groundGeometry, groundMaterial);
+    scene.add(groundMesh);
+    groundMesh.position.set(groundBody.position.x, groundBody.position.y, groundBody.position.z);
+    groundMesh.quaternion.set(groundBody.quaternion.x, groundBody.quaternion.y, groundBody.quaternion.z, groundBody.quaternion.w);
+    animate();
+}
+var world = new CANNON.World({
+    gravity: new CANNON.Vec3(0, -9.8, 0), // m/s²
+});
+var timeStep = 1 / 60;
+var lastCallTime;
 function animate() {
     requestAnimationFrame(animate);
-    // Cannon.js에서 물리 시뮬레이션 갱신
-    world.step(1 / 60);
-    // Three.js에서 렌더링 업데이트
-    rugbyBallMesh.position.set(rugbyBallBody.position.x, rugbyBallBody.position.y, rugbyBallBody.position.z);
-    rugbyBallMesh.quaternion.set(rugbyBallBody.quaternion.x, rugbyBallBody.quaternion.y, rugbyBallBody.quaternion.z, rugbyBallBody.quaternion.w);
+    eggWhite.position.set(whiteEggBody.position.x, whiteEggBody.position.y, whiteEggBody.position.z);
+    var time = performance.now() / 1000; // seconds
+    if (!lastCallTime) {
+        world.step(timeStep);
+    }
+    else {
+        var dt = time - lastCallTime;
+        world.step(timeStep, dt);
+    }
+    lastCallTime = time;
     renderer.render(scene, camera);
 }
-// 렌더링 루프 시작
-animate();
 //# sourceMappingURL=index.js.map
